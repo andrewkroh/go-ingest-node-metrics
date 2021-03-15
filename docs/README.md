@@ -1,4 +1,4 @@
-# Elasticsearch Ingest None Pipeline Metrics
+# Elasticsearch Ingest Node Pipeline Metrics
 
 This utility denormalizes Elasticsearch nodes stats to create one document
 for every ingest processor in each pipeline on each node.
@@ -9,7 +9,7 @@ for every ingest processor in each pipeline on each node.
 curl -o nodes_stats.json http://localhost:9200/_nodes/stats
 
 go get github.com/andrewkroh/go-ingest-node-metrics
-go-ingest-node-metrics nodes_stats.json
+$(go env GOPATH)/bin/go-ingest-node-metrics nodes_stats.json
 ```
 
 ## Dashboard
