@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/base32"
 	"encoding/json"
 	"flag"
@@ -38,84 +39,9 @@ import (
 	"github.com/elastic/go-elasticsearch/v7/esutil"
 )
 
-const (
-	indexMapping = `
-{
-  "settings": {
-    "number_of_shards": 1,
-    "number_of_replicas": 0
-  },
-  "mappings": {
-    "properties": {
-      "import_id": {
-        "type": "keyword"
-      },
-      "metric_type": {
-        "type": "keyword"
-      },
-      "node": {
-        "type": "keyword"
-      },
-      "pipeline": {
-        "type": "keyword"
-      },
-      "processor_index": {
-        "type": "long"
-      },
-      "processor_type": {
-        "type": "keyword"
-      },
-      "processor_name": {
-        "type": "keyword"
-      },
-      "count": {
-        "type": "long"
-      },
-      "current": {
-        "type": "long"
-      },
-      "failed": {
-        "type": "long"
-      },
-      "time_in_millis": {
-        "type": "long"
-      },
-      "pipeline_stats": {
-        "properties": {
-          "count": {
-            "type": "long"
-          },
-          "current": {
-            "type": "long"
-          },
-          "failed": {
-            "type": "long"
-          },
-          "time_in_millis": {
-            "type": "long"
-          }
-        }
-      },
-      "calculated": {
-        "properties": {
-          "execution_time_avg_ns": {
-            "type": "long"
-          },
-          "time_pct": {
-            "type": "float"
-          },
-          "failed_pct": {
-            "type": "float"
-          },
-          "events_per_sec": {
-            "type": "float"
-          }
-        }
-      }
-    }
-  }
-}
-`
+var (
+	//go:embed assets/mapping.json
+	indexMapping string
 )
 
 type NodeStats struct {
@@ -167,6 +93,9 @@ type ProcessorStat struct {
 		TimePercent   float32 `json:"time_pct"`              // Percentage of overall pipeline time.
 		FailedPercent float32 `json:"failed_pct"`            // What percentage of executions failed.
 	} `json:"calculated"`
+	Definition  string `json:"definition,omitempty"`
+	Tag         string `json:"tag,omitempty"`
+	Conditional *bool  `json:"conditional,omitempty"`
 }
 
 func (s ProcessorStat) ID() string {
@@ -200,16 +129,45 @@ type IDer interface {
 	ID() string
 }
 
+type IngestPipeline struct {
+	Description string                       `json:"description"`
+	Processors  []map[string]IngestProcessor `json:"processors"`
+	OnFailure   []map[string]IngestProcessor `json:"on_failure"`
+}
+
+type IngestProcessor struct {
+	ingestProcessor
+	raw json.RawMessage
+}
+
+type ingestProcessor struct {
+	If  *string `json:"if,omitempty"`
+	Tag *string `json:"tag,omitempty"`
+}
+
+func (p *IngestProcessor) UnmarshalJSON(b []byte) error {
+	var inner ingestProcessor
+	if err := json.Unmarshal(b, &inner); err != nil {
+		return err
+	}
+
+	p.ingestProcessor = inner
+	p.raw = b
+	return nil
+}
+
 var (
-	index            string // Index to write to.
-	importID         string // Unique ID added to events to distinguish one run from another.
-	elasticsearchURL string
-	username         string
-	password         string
-	apiKey           string
+	pipelinesJSONFile string // Path to pipeline definitions JSON file (optional).
+	index             string // Index to write to.
+	importID          string // Unique ID added to events to distinguish one run from another.
+	elasticsearchURL  string
+	username          string
+	password          string
+	apiKey            string
 )
 
 func init() {
+	flag.StringVar(&pipelinesJSONFile, "pipelines-json", "", "pipeline definitions from GET _ingest/pipeline")
 	flag.StringVar(&index, "index", "pipeline-stats", "name of index to create")
 	flag.StringVar(&importID, "import-id", strconv.FormatInt(time.Now().UnixNano(), 10), "import ID")
 	flag.StringVar(&elasticsearchURL, "es-url", "http://localhost:9200", "Elasticsearch URL")
@@ -237,11 +195,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	docs := denormalizeIngestStats(stats)
+	var pipelines map[string]*IngestPipeline
+	if pipelinesJSONFile != "" {
+		pipelines, err = readPipelines(pipelinesJSONFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	docs := denormalizeIngestStats(stats, pipelines)
 
 	if err := bulkWrite(docs); err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("Import ID:", importID)
 }
 
 func readNodeStats(inputFile string) (*NodeStats, error) {
@@ -260,11 +227,16 @@ func readNodeStats(inputFile string) (*NodeStats, error) {
 	return out, nil
 }
 
-func denormalizeIngestStats(nodeStats *NodeStats) []interface{} {
+func denormalizeIngestStats(nodeStats *NodeStats, pipelines map[string]*IngestPipeline) []interface{} {
 	var out []interface{}
 
 	for nodeName, nodeData := range nodeStats.Nodes {
 		for pipelineName, pipelineData := range nodeData.Ingest.Pipelines {
+			var pipelineDef *IngestPipeline
+			if pipelines != nil {
+				pipelineDef = pipelines[pipelineName]
+			}
+
 			pipelineStat := PipelineStat{
 				CommonFields: CommonFields{
 					ImportID:   importID,
@@ -287,13 +259,33 @@ func denormalizeIngestStats(nodeStats *NodeStats) []interface{} {
 
 			for i, s := range pipelineData.Processors {
 				for _, p := range s {
+					// Incorporate data from the pipeline definition into the stats.
+					processorType := p.Type
+					var processorDef *IngestProcessor
+					if pipelineDef != nil {
+						for name, def := range pipelineDef.Processors[i] {
+							processorType = name
+							processorDef = &def
+							break
+						}
+					}
+
 					ds := ProcessorStat{
 						CommonFields: commonFields,
 						Stats:        p.Stats,
 						ParentStats:  pipelineData.Stats,
 						Index:        i,
-						Type:         p.Type,
-						Name:         strconv.Itoa(i) + "_" + p.Type,
+						Type:         processorType,
+						Name:         strconv.Itoa(i) + "_" + processorType,
+					}
+					if processorDef != nil {
+						ifCond := processorDef.If != nil
+						ds.Conditional = &ifCond
+						ds.Definition = string(processorDef.raw)
+						if processorDef.Tag != nil {
+							ds.Tag = *processorDef.Tag
+							ds.Name += "_" + strings.ReplaceAll(strings.ToLower(*processorDef.Tag), " ", "_")
+						}
 					}
 					if ds.Stats.Count != 0 {
 						ds.Calculated.TimeAverageNs = float32(ds.Stats.TimeInMillis) / float32(ds.Stats.Count) * 1e6
@@ -397,4 +389,20 @@ func bulkWrite(docs []interface{}) error {
 
 	log.Printf("Sucessfuly indexed [%d] documents.", int64(biStats.NumFlushed))
 	return nil
+}
+
+func readPipelines(dir string) (map[string]*IngestPipeline, error) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var pipelines map[string]*IngestPipeline
+	dec := json.NewDecoder(f)
+	if err = dec.Decode(&pipelines); err != nil {
+		return nil, err
+	}
+
+	return pipelines, nil
 }

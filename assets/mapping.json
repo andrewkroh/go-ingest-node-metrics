@@ -1,0 +1,84 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "import_id": {
+        "type": "keyword"
+      },
+      "metric_type": {
+        "type": "keyword"
+      },
+      "node": {
+        "type": "keyword"
+      },
+      "pipeline": {
+        "type": "keyword"
+      },
+      "processor_index": {
+        "type": "long"
+      },
+      "processor_type": {
+        "type": "keyword"
+      },
+      "processor_name": {
+        "type": "keyword"
+      },
+      "count": {
+        "type": "long"
+      },
+      "current": {
+        "type": "long"
+      },
+      "failed": {
+        "type": "long"
+      },
+      "definition": {
+        "type": "text"
+      },
+      "conditional": {
+        "type": "boolean"
+      },
+      "tag": {
+        "type": "keyword"
+      },
+      "time_in_millis": {
+        "type": "long"
+      },
+      "pipeline_stats": {
+        "properties": {
+          "count": {
+            "type": "long"
+          },
+          "current": {
+            "type": "long"
+          },
+          "failed": {
+            "type": "long"
+          },
+          "time_in_millis": {
+            "type": "long"
+          }
+        }
+      },
+      "calculated": {
+        "properties": {
+          "execution_time_avg_ns": {
+            "type": "long"
+          },
+          "time_pct": {
+            "type": "float"
+          },
+          "failed_pct": {
+            "type": "float"
+          },
+          "events_per_sec": {
+            "type": "float"
+          }
+        }
+      }
+    }
+  }
+}
