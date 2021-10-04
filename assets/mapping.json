@@ -26,6 +26,9 @@
       "processor_name": {
         "type": "keyword"
       },
+      "stat_name": {
+        "type": "keyword"
+      },
       "count": {
         "type": "long"
       },

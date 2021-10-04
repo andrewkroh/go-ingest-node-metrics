@@ -84,6 +84,7 @@ type CommonFields struct {
 type ProcessorStat struct {
 	CommonFields
 	Stats
+	StatName    string `json:"stat_name"`
 	Index       int    `json:"processor_index"`
 	Type        string `json:"processor_type"`
 	Name        string `json:"processor_name"`
@@ -258,7 +259,7 @@ func denormalizeIngestStats(nodeStats *NodeStats, pipelines map[string]*IngestPi
 			commonFields.MetricType = "processor"
 
 			for i, s := range pipelineData.Processors {
-				for _, p := range s {
+				for statName, p := range s {
 					// Incorporate data from the pipeline definition into the stats.
 					processorType := p.Type
 					var processorDef *IngestProcessor
@@ -277,6 +278,7 @@ func denormalizeIngestStats(nodeStats *NodeStats, pipelines map[string]*IngestPi
 						Index:        i,
 						Type:         processorType,
 						Name:         strconv.Itoa(i) + "_" + processorType,
+						StatName:     statName,
 					}
 					if processorDef != nil {
 						ifCond := processorDef.If != nil
