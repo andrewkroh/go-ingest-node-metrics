@@ -262,7 +262,7 @@ func denormalizeIngestStats(nodeStats *NodeStats, pipelines map[string]*IngestPi
 					// Incorporate data from the pipeline definition into the stats.
 					processorType := p.Type
 					var processorDef *IngestProcessor
-					if pipelineDef != nil {
+					if pipelineDef != nil && len(pipelineDef.Processors) > i {
 						for name, def := range pipelineDef.Processors[i] {
 							processorType = name
 							processorDef = &def
