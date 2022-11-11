@@ -9,7 +9,7 @@ for every ingest processor in each pipeline on each node.
 curl -o nodes_stats.json http://localhost:9200/_nodes/stats
 curl -o pipelines.json http://localhost:9200/_ingest/pipeline
 
-go get github.com/andrewkroh/go-ingest-node-metrics
+go install github.com/andrewkroh/go-ingest-node-metrics@latest
 $(go env GOPATH)/bin/go-ingest-node-metrics -pipelines-json=./pipelines.json nodes_stats.json
 ```
 

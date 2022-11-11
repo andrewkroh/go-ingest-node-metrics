@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	_ "embed"
 	"encoding/base32"
 	"encoding/json"
@@ -165,6 +166,7 @@ var (
 	username          string
 	password          string
 	apiKey            string
+	insecure          bool
 )
 
 func init() {
@@ -175,6 +177,7 @@ func init() {
 	flag.StringVar(&username, "u", "", "Elasticsearch username")
 	flag.StringVar(&password, "p", "", "Elasticsearch password")
 	flag.StringVar(&apiKey, "api-key", "", "Elasticsearch API key")
+	flag.BoolVar(&insecure, "insecure", false, "Proceed and operate even for TLS server connections considered insecure.")
 	flag.Usage = usage
 }
 
@@ -323,6 +326,13 @@ func bulkWrite(docs []interface{}) error {
 		// Retry up to 5 attempts
 		//
 		MaxRetries: 5,
+
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: insecure,
+				MinVersion:         tls.VersionTLS12,
+			},
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create ES client: %w", err)
