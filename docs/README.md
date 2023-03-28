@@ -15,7 +15,7 @@ $(go env GOPATH)/bin/go-ingest-node-metrics -pipelines-json=./pipelines.json nod
 
 ## Dashboard
 
-Use the save objects import feature in Kibana to import the dashboard.ndjson
+Use the saved objects import feature in Kibana to import the dashboard.ndjson
 file.
 
 ![dashboard](./ingest-node-pipeline-dashboard.png)
