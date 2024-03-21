@@ -6,3 +6,5 @@ require (
 	github.com/elastic/go-elasticsearch/v7 v7.17.7
 	golang.org/x/crypto v0.7.0
 )
+
+require golang.org/x/sys v0.6.0 // indirect
