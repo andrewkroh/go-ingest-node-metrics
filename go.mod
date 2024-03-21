@@ -1,6 +1,6 @@
 module github.com/andrewkroh/go-ingest-node-metrics
 
-go 1.16
+go 1.22
 
 require (
 	github.com/elastic/go-elasticsearch/v7 v7.17.7
